@@ -472,9 +472,7 @@ mod tests {
         let dir = tempdir().unwrap();
 
         // Make sure no API key is set
-        unsafe {
-            env::remove_var("OPENAI_API_KEY");
-        }
+        env::remove_var("OPENAI_API_KEY");
 
         let manager = AuthManager::new(dir.path().to_path_buf(), AuthMode::ChatGPT);
 
