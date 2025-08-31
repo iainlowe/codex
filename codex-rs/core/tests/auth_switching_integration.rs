@@ -58,7 +58,5 @@ fn test_end_to_end_auth_switching() {
         }
     }
 
-    unsafe {
-        env::remove_var("OPENAI_API_KEY");
-    }
+    env::remove_var("OPENAI_API_KEY");
 }
