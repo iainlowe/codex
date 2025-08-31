@@ -86,6 +86,38 @@ impl AuthManager {
         }
     }
 
+    /// Force switch to API key mode if OPENAI_API_KEY is available.
+    /// Returns true if successfully switched to API key mode.
+    pub fn force_switch_to_api_key(&self) -> bool {
+        if let Ok(mut guard) = self.inner.write() {
+            // Try to load auth using API key mode
+            if let Ok(Some(auth)) =
+                crate::CodexAuth::from_codex_home(&self.codex_home, AuthMode::ApiKey)
+                && auth.mode == AuthMode::ApiKey
+            {
+                guard.auth = Some(auth);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Force switch back to ChatGPT mode if available.
+    /// Returns true if successfully switched to ChatGPT mode.
+    pub fn force_switch_to_chatgpt(&self) -> bool {
+        if let Ok(mut guard) = self.inner.write() {
+            // Try to load auth using ChatGPT mode
+            if let Ok(Some(auth)) =
+                crate::CodexAuth::from_codex_home(&self.codex_home, AuthMode::ChatGPT)
+                && auth.mode == AuthMode::ChatGPT
+            {
+                guard.auth = Some(auth);
+                return true;
+            }
+        }
+        false
+    }
+
     fn auths_equal(a: &Option<CodexAuth>, b: &Option<CodexAuth>) -> bool {
         match (a, b) {
             (None, None) => true,
