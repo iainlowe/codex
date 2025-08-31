@@ -943,7 +943,7 @@ pub(crate) fn new_turn_completion_stats(
     // Context window usage
     if let Some(window_size) = context_window {
         let context_tokens = total_usage.tokens_in_context_window();
-        let percentage = ((context_tokens as f32 / window_size as f32) * 100.0).round() as u8;
+        let percentage = ((context_tokens as f32 / window_size as f32) * 100.0).round() as u16;
         lines.push(Line::from(vec![
             "  • Context Usage: ".into(),
             format!("{context_tokens}/{window_size}").into(),
