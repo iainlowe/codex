@@ -232,6 +232,10 @@ impl ModelProviderInfo {
 const DEFAULT_OLLAMA_PORT: u32 = 11434;
 
 pub const BUILT_IN_OSS_MODEL_PROVIDER_ID: &str = "oss";
+pub const BUILT_IN_GITHUB_MODEL_PROVIDER_ID: &str = "github";
+
+/// Default GitHub Models model to use when `--gh` is passed without an explicit `-m`.
+pub const DEFAULT_GITHUB_MODEL: &str = "gpt-4o";
 
 /// Built-in default provider list.
 pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
@@ -477,18 +481,18 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
     fn test_github_provider_integration() {
         // Test that all built-in providers exist and GitHub is properly configured
         let providers = built_in_model_providers();
-        
+
         // Verify all expected providers exist
         assert!(providers.contains_key("github"));
         assert!(providers.contains_key("openai"));
         assert!(providers.contains_key("oss"));
-        
+
         // Verify GitHub provider has correct configuration
         let github_provider = providers.get("github").unwrap();
         assert_eq!(github_provider.name, "GitHub Models");
         assert!(github_provider.env_key_instructions.is_some());
         assert_eq!(github_provider.wire_api, WireApi::Chat);
-        
+
         // Verify OpenAI provider still works (regression test)
         let openai_provider = providers.get("openai").unwrap();
         assert_eq!(openai_provider.name, "OpenAI");

@@ -4,7 +4,9 @@
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 #![deny(clippy::disallowed_methods)]
 use app::App;
+use codex_core::BUILT_IN_GITHUB_MODEL_PROVIDER_ID;
 use codex_core::BUILT_IN_OSS_MODEL_PROVIDER_ID;
+use codex_core::DEFAULT_GITHUB_MODEL;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::ConfigToml;
@@ -98,16 +100,21 @@ pub async fn run_main(
     // When using `--oss`, let the bootstrapper pick the model (defaulting to
     // gpt-oss:20b) and ensure it is present locally. Also, force the built‑in
     // `oss` model provider.
+    // When using `--gh`, use the GitHub Models provider with gpt-4o as default.
     let model = if let Some(model) = &cli.model {
         Some(model.clone())
     } else if cli.oss {
         Some(DEFAULT_OSS_MODEL.to_owned())
+    } else if cli.gh {
+        Some(DEFAULT_GITHUB_MODEL.to_owned())
     } else {
         None // No model specified, will use the default.
     };
 
     let model_provider_override = if cli.oss {
         Some(BUILT_IN_OSS_MODEL_PROVIDER_ID.to_owned())
+    } else if cli.gh {
+        Some(BUILT_IN_GITHUB_MODEL_PROVIDER_ID.to_owned())
     } else {
         None
     };
