@@ -206,3 +206,18 @@ assertions—outputs are much larger than cargo build --release.
 If you want, I can outline targeted trims (e.g., strip = "debuginfo", opt-level
 = "z", panic abort, tighter tokio/reqwest features) and estimate impact per
 binary.
+
+📊  Turn Completed
+🔄  This Turn
+  • Input: 282 (+ 13473 cached)
+  • Output: 2709
+  • Reasoning: 2176
+  • Turn Total: 2991
+  • Estimated Cost: ~$0.1710
+
+📈  Session Total
+  • Session ID: c7df96da-daec-4fe9-aed9-3cd19b7a6192
+  • Total Input: 61473 (+ 423266 cached)
+  • Total Output: 7412
+  • Session Total: 68885
+  • Context Usage: 487223/400000 (122%)

@@ -846,6 +846,129 @@ pub(crate) fn new_status_output(
     PlainHistoryCell { lines }
 }
 
+/// Create a summary of usage statistics for a completed turn.
+pub(crate) fn new_turn_completion_stats(
+    last_turn_usage: &TokenUsage,
+    total_usage: &TokenUsage,
+    context_window: Option<u64>,
+    session_id: &Option<Uuid>,
+) -> PlainHistoryCell {
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    
+    // Header
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec!["📊 ".into(), "Turn Completed".bold().green()]));
+
+    // Turn Statistics
+    lines.push(Line::from(vec!["🔄 ".into(), "This Turn".bold()]));
+    
+    // Input tokens for this turn
+    let mut input_line_spans: Vec<Span<'static>> = vec![
+        "  • Input: ".into(),
+        last_turn_usage.non_cached_input().to_string().into(),
+    ];
+    if let Some(cached) = last_turn_usage.cached_input_tokens
+        && cached > 0
+    {
+        input_line_spans.push(format!(" (+ {cached} cached)").dim());
+    }
+    lines.push(Line::from(input_line_spans));
+    
+    // Output tokens for this turn
+    lines.push(Line::from(vec![
+        "  • Output: ".into(),
+        last_turn_usage.output_tokens.to_string().into(),
+    ]));
+    
+    // Reasoning tokens for this turn (if available)
+    if let Some(reasoning) = last_turn_usage.reasoning_output_tokens
+        && reasoning > 0
+    {
+        lines.push(Line::from(vec![
+            "  • Reasoning: ".into(),
+            reasoning.to_string().dim(),
+        ]));
+    }
+    
+    // Total for this turn
+    lines.push(Line::from(vec![
+        "  • Turn Total: ".into(),
+        last_turn_usage.blended_total().to_string().bold(),
+    ]));
+
+    // Cost estimation (placeholder for now)
+    let estimated_cost = estimate_turn_cost(last_turn_usage);
+    if estimated_cost > 0.0 {
+        lines.push(Line::from(vec![
+            "  • Estimated Cost: ~$".into(),
+            format!("{estimated_cost:.4}").into(),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+
+    // Session Statistics  
+    lines.push(Line::from(vec!["📈 ".into(), "Session Total".bold()]));
+    if let Some(session_id) = session_id {
+        lines.push(Line::from(vec![
+            "  • Session ID: ".into(),
+            session_id.to_string().dim(),
+        ]));
+    }
+    
+    // Session total input
+    let mut session_input_spans: Vec<Span<'static>> = vec![
+        "  • Total Input: ".into(),
+        total_usage.non_cached_input().to_string().into(),
+    ];
+    if let Some(cached) = total_usage.cached_input_tokens
+        && cached > 0
+    {
+        session_input_spans.push(format!(" (+ {cached} cached)").dim());
+    }
+    lines.push(Line::from(session_input_spans));
+    
+    // Session total output
+    lines.push(Line::from(vec![
+        "  • Total Output: ".into(),
+        total_usage.output_tokens.to_string().into(),
+    ]));
+    
+    // Session grand total
+    lines.push(Line::from(vec![
+        "  • Session Total: ".into(),
+        total_usage.blended_total().to_string().bold(),
+    ]));
+
+    // Context window usage
+    if let Some(window_size) = context_window {
+        let context_tokens = total_usage.tokens_in_context_window();
+        let percentage = ((context_tokens as f32 / window_size as f32) * 100.0).round() as u8;
+        lines.push(Line::from(vec![
+            "  • Context Usage: ".into(),
+            format!("{context_tokens}/{window_size}").into(),
+            format!(" ({percentage}%)").dim(),
+        ]));
+    }
+
+    PlainHistoryCell { lines }
+}
+
+/// Estimate the cost of a turn based on token usage.
+/// This is a rough approximation using typical OpenAI pricing.
+pub(crate) fn estimate_turn_cost(usage: &TokenUsage) -> f64 {
+    // Rough estimates based on typical GPT-4 pricing (as of 2024)
+    // Input: ~$0.03 per 1K tokens, Output: ~$0.06 per 1K tokens
+    // These are placeholder values and should be configurable/model-specific
+    let input_cost_per_k = 0.03;
+    let output_cost_per_k = 0.06;
+    
+    let input_cost = (usage.non_cached_input() as f64 / 1000.0) * input_cost_per_k;
+    let output_cost = (usage.output_tokens as f64 / 1000.0) * output_cost_per_k;
+    
+    input_cost + output_cost
+}
+
 /// Render a summary of configured MCP servers from the current `Config`.
 pub(crate) fn empty_mcp_output() -> PlainHistoryCell {
     let lines: Vec<Line<'static>> = vec![

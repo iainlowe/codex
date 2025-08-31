@@ -210,6 +210,19 @@ pub(crate) fn log_session_end() {
     LOGGER.write_json_line(value);
 }
 
+pub(crate) fn log_turn_completion_stats(stats: serde_json::Value) {
+    if !LOGGER.is_enabled() {
+        return;
+    }
+    let value = json!({
+        "ts": now_ts(),
+        "dir": "meta",
+        "kind": "turn_completion_stats",
+        "data": stats,
+    });
+    LOGGER.write_json_line(value);
+}
+
 fn write_record<T>(dir: &str, kind: &str, obj: &T)
 where
     T: Serialize,
