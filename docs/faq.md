@@ -8,6 +8,11 @@ In 2021, OpenAI released Codex, an AI system designed to generate code from natu
 
 We recommend using Codex with GPT-5, our best coding model. The default reasoning level is medium, and you can upgrade to high for complex tasks with the `/model` command.
 
+Codex supports multiple model providers:
+- **OpenAI** (default): GPT-5, o3, o4-mini, gpt-4o, etc.
+- **GitHub Models**: Access to various models through GitHub's API
+- **Open Source**: Local models via Ollama or other OpenAI-compatible APIs
+
 You can also use older models by using API-based auth and launching codex with the `--model` flag.
 
 ### Why does `o3` or `o4-mini` not work for me?

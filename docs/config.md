@@ -25,6 +25,8 @@ model = "o3"  # overrides the default of "gpt-5"
 
 This option lets you override and amend the default set of model providers bundled with Codex. This value is a map where the key is the value to use with `model_provider` to select the corresponding provider.
 
+Codex includes built-in support for OpenAI, GitHub Models, and open-source providers. You can also define custom providers for third-party services.
+
 For example, if you wanted to add a provider that uses the OpenAI 4o model via the chat completions API, then you could add the following configuration:
 
 ```toml
@@ -65,6 +67,23 @@ name = "Mistral"
 base_url = "https://api.mistral.ai/v1"
 env_key = "MISTRAL_API_KEY"
 ```
+
+### Built-in GitHub Models support
+
+Codex CLI includes built-in support for GitHub Models. You can use GitHub Models by setting your model provider to `"github"`:
+
+```toml
+model_provider = "github"
+model = "gpt-4o"  # or any other model available through GitHub Models
+```
+
+You'll need to set up a GitHub personal access token with `read:org` permissions and export it as the `GITHUB_TOKEN` environment variable:
+
+```bash
+export GITHUB_TOKEN="your_github_pat_here"
+```
+
+To generate a token, visit: https://github.com/settings/tokens
 
 Note that Azure requires `api-version` to be passed as a query parameter, so be sure to specify it as part of `query_params` when defining the Azure provider:
 
