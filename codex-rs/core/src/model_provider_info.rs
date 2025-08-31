@@ -472,4 +472,26 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
             "https://models.inference.ai.azure.com/chat/completions"
         );
     }
+
+    #[test]
+    fn test_github_provider_integration() {
+        // Test that all built-in providers exist and GitHub is properly configured
+        let providers = built_in_model_providers();
+        
+        // Verify all expected providers exist
+        assert!(providers.contains_key("github"));
+        assert!(providers.contains_key("openai"));
+        assert!(providers.contains_key("oss"));
+        
+        // Verify GitHub provider has correct configuration
+        let github_provider = providers.get("github").unwrap();
+        assert_eq!(github_provider.name, "GitHub Models");
+        assert!(github_provider.env_key_instructions.is_some());
+        assert_eq!(github_provider.wire_api, WireApi::Chat);
+        
+        // Verify OpenAI provider still works (regression test)
+        let openai_provider = providers.get("openai").unwrap();
+        assert_eq!(openai_provider.name, "OpenAI");
+        assert_eq!(openai_provider.wire_api, WireApi::Responses);
+    }
 }
