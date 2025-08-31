@@ -960,11 +960,11 @@ pub(crate) fn estimate_turn_cost(usage: &TokenUsage) -> f64 {
     // Rough estimates based on typical GPT-4 pricing (as of 2024)
     // Input: ~$0.03 per 1K tokens, Output: ~$0.06 per 1K tokens
     // These are placeholder values and should be configurable/model-specific
-    let input_cost_per_k = 0.03;
-    let output_cost_per_k = 0.06;
+    const GPT4_INPUT_COST_PER_K: f64 = 0.03;
+    const GPT4_OUTPUT_COST_PER_K: f64 = 0.06;
     
-    let input_cost = (usage.non_cached_input() as f64 / 1000.0) * input_cost_per_k;
-    let output_cost = (usage.output_tokens as f64 / 1000.0) * output_cost_per_k;
+    let input_cost = (usage.non_cached_input() as f64 / 1000.0) * GPT4_INPUT_COST_PER_K;
+    let output_cost = (usage.output_tokens as f64 / 1000.0) * GPT4_OUTPUT_COST_PER_K;
     
     input_cost + output_cost
 }
