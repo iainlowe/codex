@@ -228,6 +228,10 @@ impl ChatWidget {
             let sink = AppEventHistorySink(self.app_event_tx.clone());
             let _ = self.stream.finalize(true, &sink);
         }
+        
+        // Add turn completion statistics to history
+        self.add_turn_completion_stats();
+        
         // Mark task stopped and request redraw now that all content is in history.
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
@@ -1276,6 +1280,56 @@ impl ChatWidget {
     pub fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
         let [_, bottom_pane_area] = self.layout_areas(area);
         self.bottom_pane.cursor_pos(bottom_pane_area)
+    }
+
+    /// Add turn completion statistics to the history.
+    fn add_turn_completion_stats(&mut self) {
+        // Only add stats if we have non-zero token usage from the last turn
+        if !self.last_token_usage.is_zero() {
+            let stats_cell = history_cell::new_turn_completion_stats(
+                &self.last_token_usage,
+                &self.total_token_usage,
+                self.config.model_context_window,
+                &self.session_id,
+            );
+            self.add_to_history(stats_cell);
+            
+            // Also log to session log for external analysis
+            self.log_turn_completion_stats();
+        }
+    }
+
+    /// Log turn completion statistics to the session log.
+    fn log_turn_completion_stats(&self) {
+        use crate::session_log;
+        use serde_json::json;
+        
+        let stats = json!({
+            "turn_usage": {
+                "input_tokens": self.last_token_usage.input_tokens,
+                "cached_input_tokens": self.last_token_usage.cached_input_tokens,
+                "output_tokens": self.last_token_usage.output_tokens,
+                "reasoning_output_tokens": self.last_token_usage.reasoning_output_tokens,
+                "total_tokens": self.last_token_usage.total_tokens,
+                "blended_total": self.last_token_usage.blended_total(),
+                "non_cached_input": self.last_token_usage.non_cached_input(),
+            },
+            "session_usage": {
+                "input_tokens": self.total_token_usage.input_tokens,
+                "cached_input_tokens": self.total_token_usage.cached_input_tokens,
+                "output_tokens": self.total_token_usage.output_tokens,
+                "reasoning_output_tokens": self.total_token_usage.reasoning_output_tokens,
+                "total_tokens": self.total_token_usage.total_tokens,
+                "blended_total": self.total_token_usage.blended_total(),
+                "non_cached_input": self.total_token_usage.non_cached_input(),
+            },
+            "context_window": self.config.model_context_window,
+            "context_usage": self.total_token_usage.tokens_in_context_window(),
+            "session_id": self.session_id,
+            "estimated_turn_cost": history_cell::estimate_turn_cost(&self.last_token_usage),
+        });
+        
+        session_log::log_turn_completion_stats(stats);
     }
 }
 
