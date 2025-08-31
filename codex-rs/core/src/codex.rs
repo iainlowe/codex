@@ -14,6 +14,7 @@ use codex_apply_patch::ApplyPatchAction;
 use codex_apply_patch::MaybeApplyPatchVerified;
 use codex_apply_patch::maybe_parse_apply_patch_verified;
 use codex_login::AuthManager;
+use codex_login::AuthMode;
 use codex_protocol::protocol::ConversationHistoryResponseEvent;
 use codex_protocol::protocol::TaskStartedEvent;
 use codex_protocol::protocol::TurnAbortReason;
@@ -60,6 +61,7 @@ use crate::exec_command::ExecSessionManager;
 use crate::exec_command::WRITE_STDIN_TOOL_NAME;
 use crate::exec_command::WriteStdinParams;
 use crate::exec_env::create_env;
+use crate::limit_tracker::LimitTracker;
 use crate::mcp_connection_manager::McpConnectionManager;
 use crate::mcp_tool_call::handle_mcp_tool_call;
 use crate::model_family::find_family_for_model;
@@ -288,6 +290,9 @@ pub(crate) struct Session {
     codex_linux_sandbox_exe: Option<PathBuf>,
     user_shell: shell::Shell,
     show_raw_agent_reasoning: bool,
+
+    /// Tracker for ChatGPT usage limits to enable automatic API key fallback
+    limit_tracker: LimitTracker,
 }
 
 /// The context needed for a single turn of the conversation.
@@ -543,6 +548,7 @@ impl Session {
             codex_linux_sandbox_exe: config.codex_linux_sandbox_exe.clone(),
             user_shell: default_shell,
             show_raw_agent_reasoning: config.show_raw_agent_reasoning,
+            limit_tracker: LimitTracker::new(&config.codex_home),
         });
 
         // record the initial user instructions and environment context,
@@ -1625,6 +1631,24 @@ async fn run_turn(
         base_instructions_override: turn_context.base_instructions.clone(),
     };
 
+    // Check if we should attempt to switch back to ChatGPT auth after a limit cooldown
+    if let Some(auth_manager) = turn_context.client.get_auth_manager()
+        && let Some(current_auth) = auth_manager.auth()
+        && current_auth.mode == AuthMode::ApiKey
+        && sess.limit_tracker.should_retry_chatgpt()
+    {
+        info!("Attempting to switch back to ChatGPT auth after cooldown period");
+        if auth_manager.force_switch_to_chatgpt() {
+            info!("Successfully switched back to ChatGPT mode");
+            // Clear the limit record since we're back to ChatGPT
+            if let Err(err) = sess.limit_tracker.clear_limit() {
+                warn!("Failed to clear limit record: {err}");
+            }
+        } else {
+            debug!("ChatGPT auth not available, continuing with API key");
+        }
+    }
+
     let mut retries = 0;
     loop {
         match try_run_turn(sess, turn_context, turn_diff_tracker, &sub_id, &prompt).await {
@@ -1632,6 +1656,29 @@ async fn run_turn(
             Err(CodexErr::Interrupted) => return Err(CodexErr::Interrupted),
             Err(CodexErr::EnvVar(var)) => return Err(CodexErr::EnvVar(var)),
             Err(e @ (CodexErr::UsageLimitReached(_) | CodexErr::UsageNotIncluded)) => {
+                // Handle usage limit by attempting to switch to API key auth if available
+                if let CodexErr::UsageLimitReached(_) = e
+                    && let Some(auth_manager) = turn_context.client.get_auth_manager()
+                {
+                    // Record that we hit the limit
+                    if let Err(err) = sess.limit_tracker.record_limit_hit() {
+                        warn!("Failed to record usage limit: {err}");
+                    }
+
+                    // Try to switch to API key mode if current mode is ChatGPT
+                    if let Some(current_auth) = auth_manager.auth()
+                        && current_auth.mode == AuthMode::ChatGPT
+                    {
+                        info!("ChatGPT usage limit reached, attempting to switch to API key");
+                        if auth_manager.force_switch_to_api_key() {
+                            info!("Successfully switched to API key mode");
+                            // Retry the turn with API key auth
+                            continue;
+                        } else {
+                            warn!("Failed to switch to API key mode - no OPENAI_API_KEY available");
+                        }
+                    }
+                }
                 return Err(e);
             }
             Err(e) => {
