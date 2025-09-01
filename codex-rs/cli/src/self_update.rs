@@ -157,7 +157,6 @@ fn parse_version_from_tag(tag_name: &str) -> String {
         .to_string()
 }
 
-#[allow(unreachable_code)]  // Generic fallback is unreachable on known platforms, but needed for completeness
 pub fn get_current_target_triple() -> String {
     env::var("CODEX_TARGET_TRIPLE")
         .or_else(|_| env::var("TARGET"))
