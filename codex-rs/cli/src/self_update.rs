@@ -17,11 +17,13 @@ const PRIMARY_REPO_OWNER: &str = "openai";
 const PRIMARY_REPO_NAME: &str = "codex";
 
 #[derive(Deserialize, Debug, Clone)]
-#[allow(dead_code)]  // Some fields are needed for serde deserialization but not used in logic
 struct GitHubRelease {
     tag_name: String,
+    #[allow(dead_code)] // Not used in current logic
     name: String,
+    #[allow(dead_code)] // Not used in current logic
     body: String,
+    #[allow(dead_code)] // Not used in current logic
     draft: bool,
     prerelease: bool,
     published_at: DateTime<Utc>,
