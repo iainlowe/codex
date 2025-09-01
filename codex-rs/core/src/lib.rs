@@ -23,6 +23,7 @@ pub mod error;
 pub mod exec;
 mod exec_command;
 pub mod exec_env;
+pub use exec_env::AdditionalEnvVars;
 mod flags;
 pub mod git_info;
 mod is_safe_command;

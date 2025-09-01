@@ -60,7 +60,7 @@ use crate::exec_command::ExecCommandParams;
 use crate::exec_command::ExecSessionManager;
 use crate::exec_command::WRITE_STDIN_TOOL_NAME;
 use crate::exec_command::WriteStdinParams;
-use crate::exec_env::create_env;
+use crate::exec_env::create_env_with_additional;
 use crate::limit_tracker::LimitTracker;
 use crate::mcp_connection_manager::McpConnectionManager;
 use crate::mcp_tool_call::handle_mcp_tool_call;
@@ -310,6 +310,7 @@ pub(crate) struct TurnContext {
     pub(crate) shell_environment_policy: ShellEnvironmentPolicy,
     pub(crate) disable_response_storage: bool,
     pub(crate) tools_config: ToolsConfig,
+    pub(crate) additional_env_vars: crate::exec_env::AdditionalEnvVars,
 }
 
 impl TurnContext {
@@ -536,6 +537,7 @@ impl Session {
             shell_environment_policy: config.shell_environment_policy.clone(),
             cwd,
             disable_response_storage,
+            additional_env_vars: config.additional_env_vars.clone(),
         };
         let sess = Arc::new(Session {
             session_id,
@@ -1140,6 +1142,7 @@ async fn submission_loop(
                     shell_environment_policy: prev.shell_environment_policy.clone(),
                     cwd: new_cwd.clone(),
                     disable_response_storage: prev.disable_response_storage,
+                    additional_env_vars: prev.additional_env_vars.clone(),
                 };
 
                 // Install the new persistent context for subsequent tasks/turns.
@@ -1222,6 +1225,7 @@ async fn submission_loop(
                         shell_environment_policy: turn_context.shell_environment_policy.clone(),
                         cwd,
                         disable_response_storage: turn_context.disable_response_storage,
+                        additional_env_vars: turn_context.additional_env_vars.clone(),
                     };
                     // TODO: record the new environment context in the conversation history
                     // no current task, spawn a new one with the per‑turn context
@@ -2365,7 +2369,7 @@ fn to_exec_params(params: ShellToolCallParams, turn_context: &TurnContext) -> Ex
         command: params.command,
         cwd: turn_context.resolve_path(params.workdir.clone()),
         timeout_ms: params.timeout_ms,
-        env: create_env(&turn_context.shell_environment_policy),
+        env: create_env_with_additional(&turn_context.shell_environment_policy, &turn_context.additional_env_vars),
         with_escalated_permissions: params.with_escalated_permissions,
         justification: params.justification,
     }
