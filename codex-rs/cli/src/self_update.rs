@@ -1,5 +1,7 @@
-use anyhow::{Result, anyhow};
-use chrono::{DateTime, Utc};
+use anyhow::Result;
+use anyhow::anyhow;
+use chrono::DateTime;
+use chrono::Utc;
 use reqwest::Client;
 use serde::Deserialize;
 use std::env;
@@ -34,7 +36,7 @@ struct GitHubRelease {
 pub struct GitHubAsset {
     pub name: String,
     pub browser_download_url: String,
-    #[allow(dead_code)]  // Kept for completeness but not used in current logic
+    #[allow(dead_code)] // Kept for completeness but not used in current logic
     pub size: u64,
 }
 
@@ -45,7 +47,7 @@ pub struct Release {
     pub is_prerelease: bool,
     pub published_at: DateTime<Utc>,
     pub assets: Vec<GitHubAsset>,
-    #[allow(dead_code)]  // Kept for future use but not displayed in current logic
+    #[allow(dead_code)] // Kept for future use but not displayed in current logic
     pub body: String,
 }
 
@@ -70,7 +72,9 @@ pub async fn list_releases(repo_override: Option<&str>) -> Result<Vec<Release>> 
             });
         }
     } else {
-        eprintln!("Warning: Could not fetch releases from {PRIMARY_REPO_OWNER}/{PRIMARY_REPO_NAME} (API rate limit or network issue)");
+        eprintln!(
+            "Warning: Could not fetch releases from {PRIMARY_REPO_OWNER}/{PRIMARY_REPO_NAME} (API rate limit or network issue)"
+        );
     }
 
     // Check the override repo or default repo
