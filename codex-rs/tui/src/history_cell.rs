@@ -854,14 +854,17 @@ pub(crate) fn new_turn_completion_stats(
     session_id: &Option<Uuid>,
 ) -> PlainHistoryCell {
     let mut lines: Vec<Line<'static>> = Vec::new();
-    
+
     // Header
     lines.push(Line::from(""));
-    lines.push(Line::from(vec!["📊 ".into(), "Turn Completed".bold().green()]));
+    lines.push(Line::from(vec![
+        "📊 ".into(),
+        "Turn Completed".bold().green(),
+    ]));
 
     // Turn Statistics
     lines.push(Line::from(vec!["🔄 ".into(), "This Turn".bold()]));
-    
+
     // Input tokens for this turn
     let mut input_line_spans: Vec<Span<'static>> = vec![
         "  • Input: ".into(),
@@ -873,13 +876,13 @@ pub(crate) fn new_turn_completion_stats(
         input_line_spans.push(format!(" (+ {cached} cached)").dim());
     }
     lines.push(Line::from(input_line_spans));
-    
+
     // Output tokens for this turn
     lines.push(Line::from(vec![
         "  • Output: ".into(),
         last_turn_usage.output_tokens.to_string().into(),
     ]));
-    
+
     // Reasoning tokens for this turn (if available)
     if let Some(reasoning) = last_turn_usage.reasoning_output_tokens
         && reasoning > 0
@@ -889,7 +892,7 @@ pub(crate) fn new_turn_completion_stats(
             reasoning.to_string().dim(),
         ]));
     }
-    
+
     // Total for this turn
     lines.push(Line::from(vec![
         "  • Turn Total: ".into(),
@@ -907,7 +910,7 @@ pub(crate) fn new_turn_completion_stats(
 
     lines.push(Line::from(""));
 
-    // Session Statistics  
+    // Session Statistics
     lines.push(Line::from(vec!["📈 ".into(), "Session Total".bold()]));
     if let Some(session_id) = session_id {
         lines.push(Line::from(vec![
@@ -915,7 +918,7 @@ pub(crate) fn new_turn_completion_stats(
             session_id.to_string().dim(),
         ]));
     }
-    
+
     // Session total input
     let mut session_input_spans: Vec<Span<'static>> = vec![
         "  • Total Input: ".into(),
@@ -927,13 +930,13 @@ pub(crate) fn new_turn_completion_stats(
         session_input_spans.push(format!(" (+ {cached} cached)").dim());
     }
     lines.push(Line::from(session_input_spans));
-    
+
     // Session total output
     lines.push(Line::from(vec![
         "  • Total Output: ".into(),
         total_usage.output_tokens.to_string().into(),
     ]));
-    
+
     // Session grand total
     lines.push(Line::from(vec![
         "  • Session Total: ".into(),
@@ -962,10 +965,10 @@ pub(crate) fn estimate_turn_cost(usage: &TokenUsage) -> f64 {
     // These are placeholder values and should be configurable/model-specific
     const GPT4_INPUT_COST_PER_K: f64 = 0.03;
     const GPT4_OUTPUT_COST_PER_K: f64 = 0.06;
-    
+
     let input_cost = (usage.non_cached_input() as f64 / 1000.0) * GPT4_INPUT_COST_PER_K;
     let output_cost = (usage.output_tokens as f64 / 1000.0) * GPT4_OUTPUT_COST_PER_K;
-    
+
     input_cost + output_cost
 }
 

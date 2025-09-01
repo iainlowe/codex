@@ -228,10 +228,10 @@ impl ChatWidget {
             let sink = AppEventHistorySink(self.app_event_tx.clone());
             let _ = self.stream.finalize(true, &sink);
         }
-        
+
         // Add turn completion statistics to history
         self.add_turn_completion_stats();
-        
+
         // Mark task stopped and request redraw now that all content is in history.
         self.bottom_pane.set_task_running(false);
         self.running_commands.clear();
@@ -1293,7 +1293,7 @@ impl ChatWidget {
                 &self.session_id,
             );
             self.add_to_history(stats_cell);
-            
+
             // Also log to session log for external analysis
             self.log_turn_completion_stats();
         }
@@ -1303,7 +1303,7 @@ impl ChatWidget {
     fn log_turn_completion_stats(&self) {
         use crate::session_log;
         use serde_json::json;
-        
+
         let stats = json!({
             "turn_usage": {
                 "input_tokens": self.last_token_usage.input_tokens,
@@ -1328,7 +1328,7 @@ impl ChatWidget {
             "session_id": self.session_id,
             "estimated_turn_cost": history_cell::estimate_turn_cost(&self.last_token_usage),
         });
-        
+
         session_log::log_turn_completion_stats(stats);
     }
 }

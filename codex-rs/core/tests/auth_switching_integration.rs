@@ -1,5 +1,7 @@
 use codex_core::limit_tracker::LimitTracker;
-use codex_login::{AuthManager, AuthMode, login_with_api_key};
+use codex_login::AuthManager;
+use codex_login::AuthMode;
+use codex_login::login_with_api_key;
 use std::env;
 use std::sync::Arc;
 use tempfile::tempdir;

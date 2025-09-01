@@ -19,6 +19,8 @@ use std::path::PathBuf;
 
 use crate::proto::ProtoCli;
 
+mod self_update;
+
 /// Codex CLI
 ///
 /// If no subcommand is specified, options will be forwarded to the interactive CLI.
@@ -72,6 +74,10 @@ enum Subcommand {
     /// Apply the latest diff produced by Codex agent as a `git apply` to your local working tree.
     #[clap(visible_alias = "a")]
     Apply(ApplyCommand),
+
+    /// Update the Codex CLI to the latest version.
+    #[clap(visible_alias = "update")]
+    SelfUpdate(SelfUpdateCommand),
 
     /// Internal: generate TypeScript protocol bindings.
     #[clap(hide = true)]
@@ -133,6 +139,25 @@ struct GenerateTsCommand {
     /// Optional path to the Prettier executable to format generated files
     #[arg(short = 'p', long = "prettier", value_name = "PRETTIER_BIN")]
     prettier: Option<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
+struct SelfUpdateCommand {
+    /// List available releases instead of updating
+    #[arg(long)]
+    list: bool,
+
+    /// Override the default repository (format: owner/repo)
+    #[arg(short = 'r', long = "repo", value_name = "REPO")]
+    repo: Option<String>,
+
+    /// Specific version to update to (if not provided, uses latest stable)
+    #[arg(short = 'v', long = "version", value_name = "VERSION")]
+    version: Option<String>,
+
+    /// Use mock data for testing (when GitHub API is not available)
+    #[arg(long, hide = true)]
+    mock: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -209,6 +234,9 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             prepend_config_flags(&mut apply_cli.config_overrides, cli.config_overrides);
             run_apply_command(apply_cli, None).await?;
         }
+        Some(Subcommand::SelfUpdate(update_cli)) => {
+            run_self_update_command(update_cli).await?;
+        }
         Some(Subcommand::GenerateTs(gen_cli)) => {
             codex_protocol_ts::generate_ts(&gen_cli.out_dir, gen_cli.prettier.as_deref())?;
         }
@@ -232,4 +260,60 @@ fn print_completion(cmd: CompletionCommand) {
     let mut app = MultitoolCli::command();
     let name = "codex";
     generate(cmd.shell, &mut app, name, &mut std::io::stdout());
+}
+
+async fn run_self_update_command(cmd: SelfUpdateCommand) -> anyhow::Result<()> {
+    if cmd.list {
+        // List available releases
+        let releases = if cmd.mock {
+            self_update::get_mock_releases()
+        } else {
+            self_update::list_releases(cmd.repo.as_deref()).await?
+        };
+        self_update::print_releases_list(&releases);
+        return Ok(());
+    }
+
+    if cmd.mock {
+        println!("Mock mode: Would download and install binary, but not actually replacing.");
+        return Ok(());
+    }
+
+    // Perform update
+    let releases = self_update::list_releases(cmd.repo.as_deref()).await?;
+
+    let target_release = if let Some(version) = cmd.version {
+        // Find specific version
+        releases
+            .iter()
+            .find(|r| r.version == version)
+            .ok_or_else(|| anyhow::anyhow!("Version {} not found", version))?
+    } else {
+        // Find latest stable release
+        releases
+            .iter()
+            .find(|r| !r.is_prerelease)
+            .ok_or_else(|| anyhow::anyhow!("No stable releases found"))?
+    };
+
+    let current_version = env!("CARGO_PKG_VERSION");
+    if target_release.version == current_version {
+        println!("Already at version {current_version}");
+        return Ok(());
+    }
+
+    let target_triple = self_update::get_current_target_triple();
+    let asset = self_update::find_suitable_asset(&target_release.assets, &target_triple)
+        .ok_or_else(|| anyhow::anyhow!("No suitable binary found for target {}", target_triple))?;
+
+    println!(
+        "Updating from {} to {} ({})",
+        current_version, target_release.version, target_release.repo
+    );
+    println!("Downloading: {}", asset.name);
+
+    self_update::download_and_replace_binary(asset, &target_triple).await?;
+
+    println!("Update completed! Please restart the application.");
+    Ok(())
 }
