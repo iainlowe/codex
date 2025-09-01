@@ -14,8 +14,13 @@ pub struct Cli {
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 
-    #[arg(long = "oss", default_value_t = false)]
+    #[arg(long = "oss", default_value_t = false, conflicts_with = "gh")]
     pub oss: bool,
+
+    /// Convenience flag to select the GitHub Models provider.
+    /// Equivalent to -c model_provider=github.
+    #[arg(long = "gh", default_value_t = false, conflicts_with = "oss")]
+    pub gh: bool,
 
     /// Select the sandbox policy to use when executing model-generated shell
     /// commands.

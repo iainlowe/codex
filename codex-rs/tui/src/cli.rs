@@ -20,8 +20,13 @@ pub struct Cli {
     /// Convenience flag to select the local open source model provider.
     /// Equivalent to -c model_provider=oss; verifies a local Ollama server is
     /// running.
-    #[arg(long = "oss", default_value_t = false)]
+    #[arg(long = "oss", default_value_t = false, conflicts_with = "gh")]
     pub oss: bool,
+
+    /// Convenience flag to select the GitHub Models provider.
+    /// Equivalent to -c model_provider=github.
+    #[arg(long = "gh", default_value_t = false, conflicts_with = "oss")]
+    pub gh: bool,
 
     /// Configuration profile from config.toml to specify default options.
     #[arg(long = "profile", short = 'p')]

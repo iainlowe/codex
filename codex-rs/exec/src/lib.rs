@@ -8,8 +8,10 @@ use std::io::Read;
 use std::path::PathBuf;
 
 pub use cli::Cli;
+use codex_core::BUILT_IN_GITHUB_MODEL_PROVIDER_ID;
 use codex_core::BUILT_IN_OSS_MODEL_PROVIDER_ID;
 use codex_core::ConversationManager;
+use codex_core::DEFAULT_GITHUB_MODEL;
 use codex_core::NewConversation;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
@@ -38,6 +40,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         images,
         model: model_cli_arg,
         oss,
+        gh,
         config_profile,
         full_auto,
         dangerously_bypass_approvals_and_sandbox,
@@ -120,16 +123,21 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     // When using `--oss`, let the bootstrapper pick the model (defaulting to
     // gpt-oss:20b) and ensure it is present locally. Also, force the built‑in
     // `oss` model provider.
+    // When using `--gh`, use the GitHub Models provider with gpt-4o as default.
     let model = if let Some(model) = model_cli_arg {
         Some(model)
     } else if oss {
         Some(DEFAULT_OSS_MODEL.to_owned())
+    } else if gh {
+        Some(DEFAULT_GITHUB_MODEL.to_owned())
     } else {
         None // No model specified, will use the default.
     };
 
     let model_provider = if oss {
         Some(BUILT_IN_OSS_MODEL_PROVIDER_ID.to_string())
+    } else if gh {
+        Some(BUILT_IN_GITHUB_MODEL_PROVIDER_ID.to_string())
     } else {
         None // No specific model provider override.
     };

@@ -232,15 +232,19 @@ impl ModelProviderInfo {
 const DEFAULT_OLLAMA_PORT: u32 = 11434;
 
 pub const BUILT_IN_OSS_MODEL_PROVIDER_ID: &str = "oss";
+pub const BUILT_IN_GITHUB_MODEL_PROVIDER_ID: &str = "github";
+
+/// Default GitHub Models model to use when `--gh` is passed without an explicit `-m`.
+pub const DEFAULT_GITHUB_MODEL: &str = "gpt-4o";
 
 /// Built-in default provider list.
 pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
     use ModelProviderInfo as P;
 
     // We do not want to be in the business of adjucating which third-party
-    // providers are bundled with Codex CLI, so we only include the OpenAI and
-    // open source ("oss") providers by default. Users are encouraged to add to
-    // `model_providers` in config.toml to add their own providers.
+    // providers are bundled with Codex CLI, so we only include the OpenAI,
+    // GitHub Models, and open source ("oss") providers by default. Users are
+    // encouraged to add to `model_providers` in config.toml to add their own providers.
     [
         (
             "openai",
@@ -279,6 +283,29 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 stream_max_retries: None,
                 stream_idle_timeout_ms: None,
                 requires_openai_auth: true,
+            },
+        ),
+        (
+            "github",
+            P {
+                name: "GitHub Models".into(),
+                base_url: Some("https://models.inference.ai.azure.com".into()),
+                env_key: Some("GITHUB_TOKEN".into()),
+                env_key_instructions: Some(
+                    "Visit https://github.com/settings/tokens to generate a personal access token with 'read:org' permissions".into()
+                ),
+                wire_api: WireApi::Chat,
+                query_params: None,
+                http_headers: Some(
+                    [("version".to_string(), env!("CARGO_PKG_VERSION").to_string())]
+                        .into_iter()
+                        .collect(),
+                ),
+                env_http_headers: None,
+                request_max_retries: None,
+                stream_max_retries: None,
+                stream_idle_timeout_ms: None,
+                requires_openai_auth: false,
             },
         ),
         (BUILT_IN_OSS_MODEL_PROVIDER_ID, create_oss_provider()),
@@ -415,5 +442,60 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
 
         let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
         assert_eq!(expected_provider, provider);
+    }
+
+    #[test]
+    fn test_built_in_github_provider() {
+        let providers = built_in_model_providers();
+        let github_provider = providers
+            .get("github")
+            .expect("GitHub provider should exist");
+
+        assert_eq!(github_provider.name, "GitHub Models");
+        assert_eq!(
+            github_provider.base_url,
+            Some("https://models.inference.ai.azure.com".into())
+        );
+        assert_eq!(github_provider.env_key, Some("GITHUB_TOKEN".into()));
+        assert!(github_provider.env_key_instructions.is_some());
+        assert_eq!(github_provider.wire_api, WireApi::Chat);
+        assert!(!github_provider.requires_openai_auth);
+    }
+
+    #[test]
+    fn test_github_provider_url_generation() {
+        let providers = built_in_model_providers();
+        let github_provider = providers
+            .get("github")
+            .expect("GitHub provider should exist");
+
+        // Test URL generation for Chat Completions API
+        let url = github_provider.get_full_url(&None);
+        assert_eq!(
+            url,
+            "https://models.inference.ai.azure.com/chat/completions"
+        );
+    }
+
+    #[test]
+    fn test_github_provider_integration() {
+        // Test that all built-in providers exist and GitHub is properly configured
+        let providers = built_in_model_providers();
+
+        // Verify all expected providers exist
+        assert!(providers.contains_key("github"));
+        assert!(providers.contains_key("openai"));
+        assert!(providers.contains_key("oss"));
+
+        // Verify GitHub provider has correct configuration
+        let github_provider = providers.get("github").unwrap();
+        assert_eq!(github_provider.name, "GitHub Models");
+        assert!(github_provider.env_key_instructions.is_some());
+        assert_eq!(github_provider.wire_api, WireApi::Chat);
+
+        // Verify OpenAI provider still works (regression test)
+        let openai_provider = providers.get("openai").unwrap();
+        assert_eq!(openai_provider.name, "OpenAI");
+        assert_eq!(openai_provider.wire_api, WireApi::Responses);
     }
 }
