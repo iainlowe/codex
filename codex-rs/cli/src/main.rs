@@ -273,43 +273,47 @@ async fn run_self_update_command(cmd: SelfUpdateCommand) -> anyhow::Result<()> {
         self_update::print_releases_list(&releases);
         return Ok(());
     }
-    
+
     if cmd.mock {
         println!("Mock mode: Would download and install binary, but not actually replacing.");
         return Ok(());
     }
-    
+
     // Perform update
     let releases = self_update::list_releases(cmd.repo.as_deref()).await?;
-    
+
     let target_release = if let Some(version) = cmd.version {
         // Find specific version
-        releases.iter().find(|r| r.version == version)
+        releases
+            .iter()
+            .find(|r| r.version == version)
             .ok_or_else(|| anyhow::anyhow!("Version {} not found", version))?
     } else {
         // Find latest stable release
-        releases.iter().find(|r| !r.is_prerelease)
+        releases
+            .iter()
+            .find(|r| !r.is_prerelease)
             .ok_or_else(|| anyhow::anyhow!("No stable releases found"))?
     };
-    
+
     let current_version = env!("CARGO_PKG_VERSION");
     if target_release.version == current_version {
-        println!("Already at version {}", current_version);
+        println!("Already at version {current_version}");
         return Ok(());
     }
-    
+
     let target_triple = self_update::get_current_target_triple();
     let asset = self_update::find_suitable_asset(&target_release.assets, &target_triple)
-        .ok_or_else(|| anyhow::anyhow!(
-            "No suitable binary found for target {}", target_triple
-        ))?;
-    
-    println!("Updating from {} to {} ({})", 
-        current_version, target_release.version, target_release.repo);
+        .ok_or_else(|| anyhow::anyhow!("No suitable binary found for target {}", target_triple))?;
+
+    println!(
+        "Updating from {} to {} ({})",
+        current_version, target_release.version, target_release.repo
+    );
     println!("Downloading: {}", asset.name);
-    
+
     self_update::download_and_replace_binary(asset, &target_triple).await?;
-    
+
     println!("Update completed! Please restart the application.");
     Ok(())
 }
