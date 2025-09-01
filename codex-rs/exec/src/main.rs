@@ -25,7 +25,7 @@ struct TopCli {
 }
 
 fn main() -> anyhow::Result<()> {
-    arg0_dispatch_or_else(|codex_linux_sandbox_exe| async move {
+    arg0_dispatch_or_else(|codex_linux_sandbox_exe, _additional_env_vars| async move {
         let top_cli = TopCli::parse();
         // Merge root-level overrides into inner CLI struct so downstream logic remains unchanged.
         let mut inner = top_cli.inner;

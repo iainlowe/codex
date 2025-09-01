@@ -136,13 +136,13 @@ struct GenerateTsCommand {
 }
 
 fn main() -> anyhow::Result<()> {
-    arg0_dispatch_or_else(|codex_linux_sandbox_exe| async move {
-        cli_main(codex_linux_sandbox_exe).await?;
+    arg0_dispatch_or_else(|codex_linux_sandbox_exe, additional_env_vars| async move {
+        cli_main(codex_linux_sandbox_exe, additional_env_vars).await?;
         Ok(())
     })
 }
 
-async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
+async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>, additional_env_vars: codex_core::AdditionalEnvVars) -> anyhow::Result<()> {
     let cli = MultitoolCli::parse();
 
     match cli.subcommand {

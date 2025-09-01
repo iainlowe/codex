@@ -1,8 +1,10 @@
 use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
+use std::collections::HashMap;
 
 use codex_core::CODEX_APPLY_PATCH_ARG1;
+use codex_core::AdditionalEnvVars;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
 use tempfile::TempDir;
@@ -21,21 +23,20 @@ const MISSPELLED_APPLY_PATCH_ARG0: &str = "applypatch";
 /// `codex-linux-sandbox` we *directly* execute
 /// [`codex_linux_sandbox::run_main`] (which never returns). Otherwise we:
 ///
-/// 1.  Use [`dotenvy::from_path`] and [`dotenvy::dotenv`] to modify the
-///     environment before creating any threads.
+/// 1.  Use [`dotenvy::from_path`] and [`dotenvy::dotenv`] to load environment
+///     variables into an [`AdditionalEnvVars`] structure.
 /// 2.  Construct a Tokio multi-thread runtime.
 /// 3.  Derive the path to the current executable (so children can re-invoke the
 ///     sandbox) when running on Linux.
 /// 4.  Execute the provided async `main_fn` inside that runtime, forwarding any
 ///     error. Note that `main_fn` receives `codex_linux_sandbox_exe:
-///     Option<PathBuf>`, as an argument, which is generally needed as part of
-///     constructing [`codex_core::config::Config`].
+///     Option<PathBuf>` and `additional_env_vars: AdditionalEnvVars` as arguments.
 ///
 /// This function should be used to wrap any `main()` function in binary crates
 /// in this workspace that depends on these helper CLIs.
 pub fn arg0_dispatch_or_else<F, Fut>(main_fn: F) -> anyhow::Result<()>
 where
-    F: FnOnce(Option<PathBuf>) -> Fut,
+    F: FnOnce(Option<PathBuf>, AdditionalEnvVars) -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
     // Determine if we were invoked via the special alias.
@@ -73,14 +74,11 @@ where
         std::process::exit(exit_code);
     }
 
-    // This modifies the environment, which is not thread-safe, so do this
-    // before creating any threads/the Tokio runtime.
-    load_dotenv();
+    // Load environment variables from dotenv files without modifying global state
+    let mut additional_env_vars = load_dotenv_safe();
 
-    // Retain the TempDir so it exists for the lifetime of the invocation of
-    // this executable. Admittedly, we could invoke `keep()` on it, but it
-    // would be nice to avoid leaving temporary directories behind, if possible.
-    let _path_entry = match prepend_path_entry_for_apply_patch() {
+    // Prepare PATH entry for apply_patch without modifying global state
+    let _path_entry = match prepare_path_entry_for_apply_patch(&mut additional_env_vars) {
         Ok(path_entry) => Some(path_entry),
         Err(err) => {
             // It is possible that Codex will proceed successfully even if
@@ -100,38 +98,40 @@ where
             None
         };
 
-        main_fn(codex_linux_sandbox_exe).await
+        main_fn(codex_linux_sandbox_exe, additional_env_vars).await
     })
 }
 
 const ILLEGAL_ENV_VAR_PREFIX: &str = "CODEX_";
 
-/// Load env vars from ~/.codex/.env and `$(pwd)/.env`.
+/// Load env vars from ~/.codex/.env and `$(pwd)/.env` into a safe structure.
 ///
 /// Security: Do not allow `.env` files to create or modify any variables
 /// with names starting with `CODEX_`.
-fn load_dotenv() {
+fn load_dotenv_safe() -> AdditionalEnvVars {
+    let mut additional_env_vars = AdditionalEnvVars::default();
+    
     if let Ok(codex_home) = codex_core::config::find_codex_home()
         && let Ok(iter) = dotenvy::from_path_iter(codex_home.join(".env"))
     {
-        set_filtered(iter);
+        collect_filtered_vars(&mut additional_env_vars.dotenv_vars, iter);
     }
 
     if let Ok(iter) = dotenvy::dotenv_iter() {
-        set_filtered(iter);
+        collect_filtered_vars(&mut additional_env_vars.dotenv_vars, iter);
     }
+    
+    additional_env_vars
 }
 
-/// Helper to set vars from a dotenvy iterator while filtering out `CODEX_` keys.
-fn set_filtered<I>(iter: I)
+/// Helper to collect vars from a dotenvy iterator while filtering out `CODEX_` keys.
+fn collect_filtered_vars<I>(target: &mut HashMap<String, String>, iter: I)
 where
     I: IntoIterator<Item = Result<(String, String), dotenvy::Error>>,
 {
     for (key, value) in iter.into_iter().flatten() {
         if !key.to_ascii_uppercase().starts_with(ILLEGAL_ENV_VAR_PREFIX) {
-            // It is safe to call set_var() because our process is
-            // single-threaded at this point in its execution.
-            unsafe { std::env::set_var(&key, &value) };
+            target.insert(key, value);
         }
     }
 }
@@ -142,14 +142,13 @@ where
 /// - WINDOWS: `apply_patch.bat` batch script to invoke the current executable
 ///   with the "secret" --codex-run-as-apply-patch flag.
 ///
-/// This temporary directory is prepended to the PATH environment variable so
-/// that `apply_patch` can be on the PATH without requiring the user to
-/// install a separate `apply_patch` executable, simplifying the deployment of
-/// Codex CLI.
+/// This temporary directory path is added to the AdditionalEnvVars so that
+/// `apply_patch` can be on the PATH without requiring the user to install a
+/// separate `apply_patch` executable, simplifying the deployment of Codex CLI.
 ///
-/// IMPORTANT: This function modifies the PATH environment variable, so it MUST
-/// be called before multiple threads are spawned.
-fn prepend_path_entry_for_apply_patch() -> std::io::Result<TempDir> {
+/// This avoids unsafe global environment manipulation by storing the PATH
+/// modification in the AdditionalEnvVars structure.
+fn prepare_path_entry_for_apply_patch(additional_env_vars: &mut AdditionalEnvVars) -> std::io::Result<TempDir> {
     let temp_dir = TempDir::new()?;
     let path = temp_dir.path();
 
@@ -177,25 +176,8 @@ fn prepend_path_entry_for_apply_patch() -> std::io::Result<TempDir> {
         }
     }
 
-    #[cfg(unix)]
-    const PATH_SEPARATOR: &str = ":";
-
-    #[cfg(windows)]
-    const PATH_SEPARATOR: &str = ";";
-
-    let path_element = path.display();
-    let updated_path_env_var = match std::env::var("PATH") {
-        Ok(existing_path) => {
-            format!("{path_element}{PATH_SEPARATOR}{existing_path}")
-        }
-        Err(_) => {
-            format!("{path_element}")
-        }
-    };
-
-    unsafe {
-        std::env::set_var("PATH", updated_path_env_var);
-    }
+    // Add the temporary directory to the path prepends instead of modifying global PATH
+    additional_env_vars.path_prepends.push(path.display().to_string());
 
     Ok(temp_dir)
 }

@@ -4,6 +4,17 @@ use crate::config_types::ShellEnvironmentPolicyInherit;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+/// Additional environment variables that should be included when creating
+/// environments for child processes. This allows avoiding unsafe global
+/// environment manipulation.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AdditionalEnvVars {
+    /// Variables loaded from dotenv files
+    pub dotenv_vars: HashMap<String, String>,
+    /// PATH modifications (prepended to existing PATH)
+    pub path_prepends: Vec<String>,
+}
+
 /// Construct an environment map based on the rules in the specified policy. The
 /// resulting map can be passed directly to `Command::envs()` after calling
 /// `env_clear()` to ensure no unintended variables are leaked to the spawned
@@ -12,7 +23,41 @@ use std::collections::HashSet;
 /// The derivation follows the algorithm documented in the struct-level comment
 /// for [`ShellEnvironmentPolicy`].
 pub fn create_env(policy: &ShellEnvironmentPolicy) -> HashMap<String, String> {
-    populate_env(std::env::vars(), policy)
+    create_env_with_additional(policy, &AdditionalEnvVars::default())
+}
+
+/// Like `create_env` but includes additional environment variables that were
+/// loaded from sources like dotenv files or PATH modifications.
+pub fn create_env_with_additional(
+    policy: &ShellEnvironmentPolicy,
+    additional: &AdditionalEnvVars,
+) -> HashMap<String, String> {
+    // Start with the current environment variables, but merge in dotenv vars
+    let mut base_vars: HashMap<String, String> = std::env::vars().collect();
+    
+    // Add dotenv variables to the base (they can be overridden by policy later)
+    for (key, value) in &additional.dotenv_vars {
+        base_vars.insert(key.clone(), value.clone());
+    }
+    
+    // Handle PATH prepends
+    if !additional.path_prepends.is_empty() {
+        #[cfg(unix)]
+        const PATH_SEPARATOR: &str = ":";
+        #[cfg(windows)]
+        const PATH_SEPARATOR: &str = ";";
+        
+        if let Some(existing_path) = base_vars.get("PATH") {
+            let mut new_path = additional.path_prepends.join(PATH_SEPARATOR);
+            new_path.push_str(PATH_SEPARATOR);
+            new_path.push_str(existing_path);
+            base_vars.insert("PATH".to_string(), new_path);
+        } else {
+            base_vars.insert("PATH".to_string(), additional.path_prepends.join(PATH_SEPARATOR));
+        }
+    }
+    
+    populate_env(base_vars, policy)
 }
 
 fn populate_env<I>(vars: I, policy: &ShellEnvironmentPolicy) -> HashMap<String, String>

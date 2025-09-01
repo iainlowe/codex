@@ -802,6 +802,7 @@ fn derive_config_from_params(
         disable_response_storage: None,
         show_raw_agent_reasoning: None,
         tools_web_search_request: None,
+        additional_env_vars: None,
     };
 
     let cli_overrides = cli_overrides
