@@ -1,0 +1,114 @@
+name: Release on tag
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write  # needed to create releases and upload assets
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            ext: tar.gz
+          - os: macos-latest
+            name: darwin-arm64
+            target: aarch64-apple-darwin
+            ext: tar.gz
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            codex-rs -> target
+
+      - name: Build (release)
+        run: |
+          cargo build --release --target ${{ matrix.target }} --manifest-path codex-rs/Cargo.toml
+          BIN="codex"
+          SRC="target/${{ matrix.target }}/release/${BIN}"
+
+          # Strip to reduce size
+          if command -v strip >/dev/null 2>&1; then
+            strip "$SRC" || true
+          fi
+
+          mkdir -p dist
+          cp "$SRC" "dist/${BIN}"
+
+      - name: Package artifact
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          BIN="codex"
+          PKG="codex-${TAG}-${{ matrix.name }}"
+          mkdir -p "package/${PKG}"
+          cp dist/${BIN} "package/${PKG}/"
+          cat > "package/${PKG}/README.txt" <<EOF
+          codex
+          -----------
+          Built from tag: ${GITHUB_REF_NAME}
+          Place this binary somewhere on your PATH and mark it executable (chmod +x).
+          EOF
+
+          tar -C package -czf "${PKG}.${{ matrix.ext }}" "${PKG}"
+          echo "ASSET=${PKG}.${{ matrix.ext }}" >> $GITHUB_ENV
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: List artifacts (debug)
+        run: ls -R ./artifacts
+
+      - name: Gather asset paths
+        id: gather
+        run: |
+          mapfile -t files < <(find artifacts -type f -maxdepth 2)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          for f in "${files[@]}"; do
+            echo "$f" >> $GITHUB_OUTPUT
+          done
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          files: |
+            ${{ steps.gather.outputs.files }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
